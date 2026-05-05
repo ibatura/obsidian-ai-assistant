@@ -1,6 +1,6 @@
 import { App, Editor, Notice, TFile } from "obsidian";
 import { AiAssistantSettings } from "../settings";
-import { resolveLlmPrompt } from "../core/promptResolver";
+import { resolveInlinePrompt } from "../core/promptResolver";
 import { expandObsidianLinks } from "../core/linkResolver";
 import { buildNoteNamesBlock } from "../core/noteNamesContext";
 import { createLlmClient } from "../core/llmClient";
@@ -43,66 +43,40 @@ function validateProviderSettings(settings: AiAssistantSettings): string | null 
   }
 }
 
-export async function insertLlmResultInPlace(
-  editor: Editor,
-  file: TFile | null,
-  app: App,
-  settings: AiAssistantSettings
-): Promise<void> {
-  if (!file) {
-    new Notice("No active file");
-    return;
-  }
-
-  // Step 1: Input scope — selection or current line
+function getRawInput(editor: Editor): string {
   const selection = editor.getSelection();
-  const rawInput = selection.trim()
+  return selection.trim()
     ? selection
     : editor.getLine(editor.getCursor().line);
+}
 
-  if (!rawInput.trim()) {
-    new Notice("Nothing to send to AI Agent");
-    return;
-  }
-
-  // Step 2: Open prompt picker before showing progress so the UI isn't obscured
-  let pickedPromptFile: TFile | null = null;
-  if (settings.llmPromptMode === "picker") {
-    const picked = await new PromptPickerModal(app, settings).openAndAwait();
-    if (picked === "cancelled") {
-      new Notice("Cancelled");
-      return;
-    }
-    pickedPromptFile = picked;
-  }
-
+async function runRequest(
+  editor: Editor,
+  file: TFile,
+  app: App,
+  settings: AiAssistantSettings,
+  rawInput: string,
+  systemPrompt: string,
+): Promise<void> {
   const progress = showProgressIndicator("Preparing request...");
 
   try {
-    // Step 3: Expand Obsidian links
+    // Step 1: Expand Obsidian links
     progress.updateStatus("Expanding links...", 10);
     const { expanded, unresolved } = await expandObsidianLinks(rawInput, file.path, app);
     if (unresolved.length > 0) {
       new Notice(`Could not resolve links: ${unresolved.join(", ")}`);
     }
 
-    // Step 4: Resolve prompt
-    progress.updateStatus("Loading system prompt...", 20);
-    let systemPrompt: string;
-    if (settings.llmPromptMode === "picker") {
-      systemPrompt = pickedPromptFile ? await app.vault.read(pickedPromptFile) : "";
-    } else {
-      systemPrompt = await resolveLlmPrompt(app, settings);
-    }
-
-    // Step 4.5: Append vault note names block if enabled
+    // Step 2: Append vault note names block if enabled
+    let resolvedSystemPrompt = systemPrompt;
     if (settings.includeVaultNoteNames) {
       progress.updateStatus("Building note list...", 25);
       const noteBlock = buildNoteNamesBlock(app, settings.vaultNoteNamesExclusions);
-      systemPrompt = systemPrompt ? `${systemPrompt}\n\n${noteBlock}` : noteBlock;
+      resolvedSystemPrompt = resolvedSystemPrompt ? `${resolvedSystemPrompt}\n\n${noteBlock}` : noteBlock;
     }
 
-    // Step 5: Validate provider
+    // Step 3: Validate provider
     const validationError = validateProviderSettings(settings);
     if (validationError) {
       progress.close();
@@ -110,7 +84,7 @@ export async function insertLlmResultInPlace(
       return;
     }
 
-    // Step 6: Call LLM
+    // Step 4: Call LLM
     const PROVIDER_LABELS: Record<string, string> = {
       copilot: "Copilot", claude: "Claude", "claude-proxy": "Claude (proxy)", gemini: "Gemini", cli: "CLI",
     };
@@ -118,7 +92,7 @@ export async function insertLlmResultInPlace(
     progress.updateStatus(`Sending to ${providerLabel}...`, 30);
     const client = createLlmClient(settings);
     progress.updateStatus("Waiting for response...", 50);
-    const result = await client.generateResult({ systemPrompt, userContent: expanded });
+    const result = await client.generateResult({ systemPrompt: resolvedSystemPrompt, userContent: expanded });
 
     if (!result) {
       progress.close();
@@ -126,15 +100,15 @@ export async function insertLlmResultInPlace(
       return;
     }
 
-    // Step 7: Insert result
+    // Step 5: Insert result
     progress.updateStatus("Processing response...", 85);
 
     let block = "\n\n";
 
     if (settings.debug) {
       const model = settings.llmModel.trim() || "(default)";
-      const systemBlock = systemPrompt.trim()
-        ? "```text\n" + systemPrompt + "\n```"
+      const systemBlock = resolvedSystemPrompt.trim()
+        ? "```text\n" + resolvedSystemPrompt + "\n```"
         : "_(empty)_";
       block +=
         `## AI Request (debug)\n\n` +
@@ -166,4 +140,68 @@ export async function insertLlmResultInPlace(
     progress.close();
     new Notice("Error while calling AI, see console");
   }
+}
+
+/**
+ * "Ask AI" command — sends selected text (or current line) directly to the LLM.
+ * Uses the inline system prompt if `llmIncludeInlineSystemPrompt` is enabled,
+ * otherwise sends with no system prompt.
+ */
+export async function insertLlmResultRaw(
+  editor: Editor,
+  file: TFile | null,
+  app: App,
+  settings: AiAssistantSettings,
+): Promise<void> {
+  if (!file) {
+    new Notice("No active file");
+    return;
+  }
+
+  const rawInput = getRawInput(editor);
+  if (!rawInput.trim()) {
+    new Notice("Nothing to send to AI Agent");
+    return;
+  }
+
+  const systemPrompt = resolveInlinePrompt(settings);
+  await runRequest(editor, file, app, settings, rawInput, systemPrompt);
+}
+
+/**
+ * "Ask AI with template" command — opens the prompt-file picker, uses the chosen
+ * template as the primary system prompt, and optionally prepends the inline prompt
+ * when `llmIncludeInlineSystemPrompt` is enabled.
+ */
+export async function insertLlmResultWithTemplate(
+  editor: Editor,
+  file: TFile | null,
+  app: App,
+  settings: AiAssistantSettings,
+): Promise<void> {
+  if (!file) {
+    new Notice("No active file");
+    return;
+  }
+
+  const rawInput = getRawInput(editor);
+  if (!rawInput.trim()) {
+    new Notice("Nothing to send to AI Agent");
+    return;
+  }
+
+  // Open picker before showing progress so the UI isn't obscured
+  const picked = await new PromptPickerModal(app, settings).openAndAwait();
+  if (picked === "cancelled") {
+    new Notice("Cancelled");
+    return;
+  }
+
+  const inlinePrompt = resolveInlinePrompt(settings);
+  const templateContent = picked ? await app.vault.read(picked) : "";
+  const systemPrompt = inlinePrompt
+    ? `${inlinePrompt}\n\n${templateContent}`
+    : templateContent;
+
+  await runRequest(editor, file, app, settings, rawInput, systemPrompt);
 }

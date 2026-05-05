@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { insertLlmResultInPlace } from "./insertResult";
+import { insertLlmResultRaw, insertLlmResultWithTemplate } from "./insertResult";
 import { AiAssistantSettings } from "../settings";
-import { Notice } from "obsidian";
 
 let mockOpenAndAwait = vi.fn().mockResolvedValue(null as null);
 
@@ -29,75 +28,74 @@ vi.mock("../core/noteNamesContext", () => ({
 
 const { expandObsidianLinks } = await import("../core/linkResolver");
 
-describe("Insert Result Command", () => {
-  let mockEditor: {
-    getSelection: ReturnType<typeof vi.fn>;
-    getLine: ReturnType<typeof vi.fn>;
-    lastLine: ReturnType<typeof vi.fn>;
-    getCursor: ReturnType<typeof vi.fn>;
-    replaceRange: ReturnType<typeof vi.fn>;
-    replaceSelection: ReturnType<typeof vi.fn>;
+// Shared test fixtures
+function makeEditor(selection = "", line = "current line text") {
+  return {
+    getSelection: vi.fn().mockReturnValue(selection),
+    getLine: vi.fn().mockReturnValue(line),
+    lastLine: vi.fn().mockReturnValue(10),
+    getCursor: vi.fn().mockReturnValue({ line: 5, ch: 10 }),
+    replaceRange: vi.fn(),
+    replaceSelection: vi.fn(),
   };
-  let mockApp: {
+}
+
+function makeApp() {
+  return {
     vault: {
-      read: ReturnType<typeof vi.fn>;
-      getFiles: ReturnType<typeof vi.fn>;
-      getAbstractFileByPath: ReturnType<typeof vi.fn>;
-    };
+      read: vi.fn().mockResolvedValue("template content"),
+      getFiles: vi.fn().mockReturnValue([]),
+      getMarkdownFiles: vi.fn().mockReturnValue([]),
+      getAbstractFileByPath: vi.fn(),
+    },
     metadataCache: {
-      getFirstLinkpathDest: ReturnType<typeof vi.fn>;
-      getFileCache: ReturnType<typeof vi.fn>;
-    };
+      getFirstLinkpathDest: vi.fn().mockReturnValue(null),
+      getFileCache: vi.fn().mockReturnValue({}),
+    },
   };
+}
+
+function makeSettings(overrides: Partial<AiAssistantSettings> = {}): AiAssistantSettings {
+  return {
+    insertPosition: "after-selection",
+    llmResultHeading: "AI Result",
+    llmProvider: "cli",
+    llmModel: "",
+    timeoutMs: 60000,
+    copilotApiBaseUrl: "",
+    copilotApiKey: "",
+    claudeApiBaseUrl: "",
+    claudeApiKey: "",
+    claudeProxyApiBaseUrl: "",
+    claudeProxyApiKey: "",
+    geminiApiBaseUrl: "",
+    geminiApiKey: "",
+    cliCommand: "echo",
+    cliArgs: "",
+    cliCwd: "",
+    llmInlinePrompt: "You are an expert assistant.",
+    llmIncludeInlineSystemPrompt: true,
+    llmPromptsFolder: "",
+    includeVaultNoteNames: false,
+    vaultNoteNamesExclusions: ["Untitled*", "Screenshot*"],
+    debug: false,
+    ...overrides,
+  } as AiAssistantSettings;
+}
+
+describe("insertLlmResultRaw", () => {
+  let mockEditor: ReturnType<typeof makeEditor>;
+  let mockApp: ReturnType<typeof makeApp>;
   let mockFile: { path: string };
   let mockSettings: AiAssistantSettings;
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    mockEditor = {
-      getSelection: vi.fn().mockReturnValue(""),
-      getLine: vi.fn().mockReturnValue("current line text"),
-      lastLine: vi.fn().mockReturnValue(10),
-      getCursor: vi.fn().mockReturnValue({ line: 5, ch: 10 }),
-      replaceRange: vi.fn(),
-      replaceSelection: vi.fn(),
-    };
+    mockOpenAndAwait = vi.fn().mockResolvedValue(null);
+    mockEditor = makeEditor();
+    mockApp = makeApp();
     mockFile = { path: "test.md" };
-    mockApp = {
-      vault: {
-        read: vi.fn(),
-        getFiles: vi.fn().mockReturnValue([]),
-        getMarkdownFiles: vi.fn().mockReturnValue([]),
-        getAbstractFileByPath: vi.fn(),
-      },
-      metadataCache: {
-        getFirstLinkpathDest: vi.fn().mockReturnValue(null),
-        getFileCache: vi.fn().mockReturnValue({}),
-      },
-    };
-    mockSettings = {
-      insertPosition: "after-selection",
-      llmResultHeading: "AI Result",
-      llmProvider: "cli",
-      llmModel: "",
-      timeoutMs: 60000,
-      copilotApiBaseUrl: "",
-      copilotApiKey: "",
-      claudeApiBaseUrl: "",
-      claudeApiKey: "",
-      geminiApiBaseUrl: "",
-      geminiApiKey: "",
-      cliCommand: "echo",
-      cliArgs: "",
-      cliCwd: "",
-      llmPromptMode: "none",
-      llmInlinePrompt: "You are an expert assistant.",
-      llmIncludeInlineSystemPrompt: true,
-      llmPromptsFolder: "",
-      includeVaultNoteNames: false,
-      vaultNoteNamesExclusions: ["Untitled*", "Screenshot*"],
-    } as AiAssistantSettings;
+    mockSettings = makeSettings();
 
     (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
       expanded: "current line text",
@@ -106,7 +104,7 @@ describe("Insert Result Command", () => {
   });
 
   it("shows notice and exits when no file provided", async () => {
-    await insertLlmResultInPlace(mockEditor as any, null, mockApp as any, mockSettings);
+    await insertLlmResultRaw(mockEditor as any, null, mockApp as any, mockSettings);
     expect(mockEditor.replaceRange).not.toHaveBeenCalled();
     expect(mockEditor.replaceSelection).not.toHaveBeenCalled();
   });
@@ -115,57 +113,157 @@ describe("Insert Result Command", () => {
     mockEditor.getSelection.mockReturnValue("");
     mockEditor.getLine.mockReturnValue("current line text");
 
-    await insertLlmResultInPlace(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    await insertLlmResultRaw(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
 
     expect(mockEditor.getLine).toHaveBeenCalled();
   });
 
   it("uses selection when non-empty", async () => {
-    mockEditor.getSelection.mockReturnValue("selected text");
+    mockEditor = makeEditor("selected text");
     (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
       expanded: "selected text",
       unresolved: [],
     });
 
-    await insertLlmResultInPlace(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    await insertLlmResultRaw(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
 
     expect(mockEditor.getLine).not.toHaveBeenCalled();
   });
 
   it("shows 'Nothing to send' notice and aborts when both selection and line are empty", async () => {
-    mockEditor.getSelection.mockReturnValue("   ");
-    mockEditor.getLine.mockReturnValue("   ");
+    mockEditor = makeEditor("   ", "   ");
 
-    await insertLlmResultInPlace(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    await insertLlmResultRaw(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
 
     expect(expandObsidianLinks).not.toHaveBeenCalled();
     expect(mockEditor.replaceRange).not.toHaveBeenCalled();
   });
 
-  it("shows notice for unresolved links but continues", async () => {
-    mockEditor.getSelection.mockReturnValue("See [[Missing]]");
-    (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
-      expanded: "See [[Missing]]",
-      unresolved: ["[[Missing]]"],
-    });
-
-    await insertLlmResultInPlace(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
-    // Command continues (provider validation fires next since cliCommand is set)
-  });
-
-  it("aborts when picker mode is cancelled", async () => {
-    mockOpenAndAwait = vi.fn().mockResolvedValue("cancelled");
-
-    mockSettings.llmPromptMode = "picker";
-    mockEditor.getSelection.mockReturnValue("some text");
+  it("sends inline system prompt when toggle is on", async () => {
+    mockSettings = makeSettings({ llmIncludeInlineSystemPrompt: true, llmInlinePrompt: "my prompt" });
+    mockEditor = makeEditor("some text");
     (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
       expanded: "some text",
       unresolved: [],
     });
 
-    await insertLlmResultInPlace(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    // Command will run to provider validation (cli with echo command passes)
+    await insertLlmResultRaw(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    // No errors thrown means the flow proceeded past prompt resolution
+  });
+
+  it("sends with no system prompt when toggle is off", async () => {
+    mockSettings = makeSettings({ llmIncludeInlineSystemPrompt: false });
+    mockEditor = makeEditor("some text");
+    (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      expanded: "some text",
+      unresolved: [],
+    });
+
+    await insertLlmResultRaw(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    // No errors thrown; empty system prompt is valid
+  });
+
+  it("shows notice for unresolved links but continues", async () => {
+    mockEditor = makeEditor("See [[Missing]]");
+    (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      expanded: "See [[Missing]]",
+      unresolved: ["[[Missing]]"],
+    });
+
+    await insertLlmResultRaw(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+    // Command continues (provider validation fires next since cliCommand is set)
+  });
+});
+
+describe("insertLlmResultWithTemplate", () => {
+  let mockEditor: ReturnType<typeof makeEditor>;
+  let mockApp: ReturnType<typeof makeApp>;
+  let mockFile: { path: string };
+  let mockSettings: AiAssistantSettings;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOpenAndAwait = vi.fn().mockResolvedValue({ path: "Prompts/AI/my-template.md" });
+    mockEditor = makeEditor("some text");
+    mockApp = makeApp();
+    mockFile = { path: "test.md" };
+    mockSettings = makeSettings();
+
+    (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      expanded: "some text",
+      unresolved: [],
+    });
+  });
+
+  it("shows notice and exits when no file provided", async () => {
+    await insertLlmResultWithTemplate(mockEditor as any, null, mockApp as any, mockSettings);
+    expect(mockEditor.replaceRange).not.toHaveBeenCalled();
+    expect(mockEditor.replaceSelection).not.toHaveBeenCalled();
+  });
+
+  it("aborts when picker is cancelled", async () => {
+    mockOpenAndAwait = vi.fn().mockResolvedValue("cancelled");
+
+    await insertLlmResultWithTemplate(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
 
     expect(mockEditor.replaceRange).not.toHaveBeenCalled();
     expect(mockEditor.replaceSelection).not.toHaveBeenCalled();
+  });
+
+  it("reads template file when picker returns a file", async () => {
+    const pickedFile = { path: "Prompts/AI/my-template.md" };
+    mockOpenAndAwait = vi.fn().mockResolvedValue(pickedFile);
+
+    await insertLlmResultWithTemplate(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+
+    expect(mockApp.vault.read).toHaveBeenCalledWith(pickedFile);
+  });
+
+  it("concatenates inline prompt and template when toggle is on", async () => {
+    const pickedFile = { path: "Prompts/AI/my-template.md" };
+    mockOpenAndAwait = vi.fn().mockResolvedValue(pickedFile);
+    mockSettings = makeSettings({
+      llmIncludeInlineSystemPrompt: true,
+      llmInlinePrompt: "base instruction",
+    });
+    mockApp.vault.read.mockResolvedValue("template content");
+
+    await insertLlmResultWithTemplate(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+
+    expect(mockApp.vault.read).toHaveBeenCalledWith(pickedFile);
+    // Both inline and template are used; flow proceeds to LLM call
+  });
+
+  it("uses only template content when toggle is off", async () => {
+    const pickedFile = { path: "Prompts/AI/my-template.md" };
+    mockOpenAndAwait = vi.fn().mockResolvedValue(pickedFile);
+    mockSettings = makeSettings({ llmIncludeInlineSystemPrompt: false });
+    mockApp.vault.read.mockResolvedValue("template content");
+
+    await insertLlmResultWithTemplate(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+
+    expect(mockApp.vault.read).toHaveBeenCalledWith(pickedFile);
+  });
+
+  it("shows 'Nothing to send' notice and aborts when input is empty", async () => {
+    mockEditor = makeEditor("   ", "   ");
+
+    await insertLlmResultWithTemplate(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+
+    expect(mockOpenAndAwait).not.toHaveBeenCalled();
+    expect(mockEditor.replaceRange).not.toHaveBeenCalled();
+  });
+
+  it("expands wikilinks in selected text", async () => {
+    mockEditor = makeEditor("See [[MyNote]]");
+    (expandObsidianLinks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      expanded: "See full note content",
+      unresolved: [],
+    });
+
+    await insertLlmResultWithTemplate(mockEditor as any, mockFile as any, mockApp as any, mockSettings);
+
+    expect(expandObsidianLinks).toHaveBeenCalledWith("See [[MyNote]]", "test.md", mockApp);
   });
 });

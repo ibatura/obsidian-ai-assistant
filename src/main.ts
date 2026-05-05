@@ -16,9 +16,9 @@ export default class AiAssistantPlugin extends Plugin {
     const saved = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
 
-    // Migrate legacy "from-folder" prompt mode to "picker"
-    if ((this.settings.llmPromptMode as string) === "from-folder") {
-      this.settings.llmPromptMode = "picker";
+    // Migrate: remove legacy llmPromptMode field (behavior is now command-driven)
+    if ("llmPromptMode" in this.settings) {
+      delete (this.settings as Record<string, unknown>)["llmPromptMode"];
       await this.saveSettings();
     }
   }

@@ -1,12 +1,20 @@
 import type AiAssistantPlugin from "../main";
-import { insertLlmResultInPlace } from "./insertResult";
+import { insertLlmResultRaw, insertLlmResultWithTemplate } from "./insertResult";
 
 export function registerCommands(plugin: AiAssistantPlugin): void {
   plugin.addCommand({
-    id: "insert-ai-result",
+    id: "ask-ai",
     name: "Ask AI",
     editorCallback: async (editor, view) => {
-      await insertLlmResultInPlace(editor, view.file, plugin.app, plugin.settings);
+      await insertLlmResultRaw(editor, view.file, plugin.app, plugin.settings);
+    },
+  });
+
+  plugin.addCommand({
+    id: "ask-ai-with-template",
+    name: "Ask AI with template",
+    editorCallback: async (editor, view) => {
+      await insertLlmResultWithTemplate(editor, view.file, plugin.app, plugin.settings);
     },
   });
 }

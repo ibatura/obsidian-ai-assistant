@@ -1,62 +1,30 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { resolveLlmPrompt } from "./promptResolver";
+import { describe, it, expect } from "vitest";
+import { resolveInlinePrompt } from "./promptResolver";
 import { AiAssistantSettings } from "../settings";
 
-describe("Prompt Resolver", () => {
-  let mockApp: object;
-  const dummySettings: Partial<AiAssistantSettings> = {
+describe("resolveInlinePrompt", () => {
+  const baseSettings: Partial<AiAssistantSettings> = {
     llmInlinePrompt: "inline prompt test",
+    llmIncludeInlineSystemPrompt: true,
   };
 
-  beforeEach(() => {
-    mockApp = {};
+  it("returns the inline prompt when toggle is on", () => {
+    const settings = { ...baseSettings, llmIncludeInlineSystemPrompt: true } as AiAssistantSettings;
+    expect(resolveInlinePrompt(settings)).toBe("inline prompt test");
   });
 
-  it("returns inline prompt when mode is 'inline'", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "inline" } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("inline prompt test");
+  it("returns empty string when toggle is off", () => {
+    const settings = { ...baseSettings, llmIncludeInlineSystemPrompt: false } as AiAssistantSettings;
+    expect(resolveInlinePrompt(settings)).toBe("");
   });
 
-  it("returns empty string when mode is 'none'", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "none" } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("");
+  it("falls back to default prompt when llmInlinePrompt is empty and toggle is on", () => {
+    const settings = { llmInlinePrompt: "", llmIncludeInlineSystemPrompt: true } as AiAssistantSettings;
+    expect(resolveInlinePrompt(settings)).toContain("expert assistant");
   });
 
-  it("returns inline prompt as fallback when mode is 'picker'", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "picker" } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("inline prompt test");
-  });
-
-  it("uses default inline prompt when llmInlinePrompt is empty", async () => {
-    const settings = { llmInlinePrompt: "", llmPromptMode: "inline" } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toContain("expert assistant");
-  });
-
-  it("returns inline prompt when mode is 'inline' and toggle is true", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "inline", llmIncludeInlineSystemPrompt: true } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("inline prompt test");
-  });
-
-  it("returns empty string when mode is 'inline' and toggle is false", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "inline", llmIncludeInlineSystemPrompt: false } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("");
-  });
-
-  it("toggle has no effect when mode is 'picker'", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "picker", llmIncludeInlineSystemPrompt: false } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("inline prompt test");
-  });
-
-  it("toggle has no effect when mode is 'none'", async () => {
-    const settings = { ...dummySettings, llmPromptMode: "none", llmIncludeInlineSystemPrompt: false } as AiAssistantSettings;
-    const prompt = await resolveLlmPrompt(mockApp as any, settings);
-    expect(prompt).toBe("");
+  it("returns empty string when llmInlinePrompt is empty and toggle is off", () => {
+    const settings = { llmInlinePrompt: "", llmIncludeInlineSystemPrompt: false } as AiAssistantSettings;
+    expect(resolveInlinePrompt(settings)).toBe("");
   });
 });

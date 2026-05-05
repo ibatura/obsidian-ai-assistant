@@ -20,7 +20,7 @@ Obsidian community plugin that adds a single command — *Ask AI* — to send se
 - **For coding conventions, build commands, and policies, see [AGENTS.md](AGENTS.md). For architecture, see [documentation/](documentation/).** Do not duplicate either here.
 - New features go through the SDD cycle described in [SDD process](#sdd-process) below. Each feature gets its own folder under `.sdd/` with a specification, an implementation plan, and one file per task.
 - The plugin is **desktop-only** (`isDesktopOnly: true` in [manifest.json](manifest.json)) because the CLI provider uses Node `child_process`. Do not introduce code paths that break this.
-- Stable IDs: command id `insert-ai-result` and plugin id `ai-assistant` must never change after release ([AGENTS.md "Commands & settings"](AGENTS.md)).
+- Stable IDs: command ids `ask-ai`, `ask-ai-with-template` and plugin id `ai-assistant` must never change after release ([AGENTS.md "Commands & settings"](AGENTS.md)).
 
 ## Quick commands
 

@@ -232,78 +232,55 @@ export class AiAssistantSettingTab extends PluginSettingTab {
         );
     }
 
-    // ── Section C: Prompt Configuration ──────────────────────────────────────
+    // ── Section C: System prompt & templates ──────────────────────────────────
     this.addSectionHeader(
-      "Prompt mode & system instructions",
-      "Choose how system prompts are provided to the AI and configure inline prompt content."
+      "System prompt & templates",
+      "Configure the system prompt sent alongside requests. Use 'Ask AI' to send raw text, or 'Ask AI with template' to pick a prompt file from your vault."
     );
 
     new Setting(containerEl)
-      .setName("Prompt mode")
+      .setName("System prompt")
       .setDesc(
-        this.plugin.settings.llmPromptMode === "none"
-          ? "No system prompt is sent — only your document selection is processed."
-          : this.plugin.settings.llmPromptMode === "inline"
-          ? "A static system prompt you configure below is used."
-          : "A prompt file from your vault is chosen before each request."
+        "Instruction sent to the AI as the system message when the toggle below is enabled. " +
+        "For 'Ask AI with template', this is prepended before the chosen template."
       )
-      .addDropdown(drop =>
-        drop
-          .addOption("none", "None")
-          .addOption("inline", "Inline")
-          .addOption("picker", "Pick at invocation")
-          .setValue(this.plugin.settings.llmPromptMode)
+      .addTextArea(text =>
+        text
+          .setPlaceholder("Describe what the AI should produce...")
+          .setValue(this.plugin.settings.llmInlinePrompt)
           .onChange(async (value) => {
-            this.plugin.settings.llmPromptMode = value as "none" | "inline" | "picker";
+            this.plugin.settings.llmInlinePrompt = value;
             await this.plugin.saveSettings();
-            this.display();
           })
       );
 
-    if (this.plugin.settings.llmPromptMode === "inline") {
-      new Setting(containerEl)
-        .setName("System prompt")
-        .setDesc("Instruction sent to the AI as the system message.")
-        .addTextArea(text =>
-          text
-            .setPlaceholder("Describe what the AI should produce...")
-            .setValue(this.plugin.settings.llmInlinePrompt)
-            .onChange(async (value) => {
-              this.plugin.settings.llmInlinePrompt = value;
-              await this.plugin.saveSettings();
-            })
-        );
+    new Setting(containerEl)
+      .setName("Include system prompt")
+      .setDesc(
+        "When enabled, the system prompt above is sent alongside your document selection. " +
+        "When disabled, only your document selection is sent (or just the template for 'Ask AI with template')."
+      )
+      .addToggle(toggle =>
+        toggle
+          .setValue(this.plugin.settings.llmIncludeInlineSystemPrompt)
+          .onChange(async (value) => {
+            this.plugin.settings.llmIncludeInlineSystemPrompt = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
-      new Setting(containerEl)
-        .setName("Include system prompt with document selection")
-        .setDesc(
-          "When enabled, both the system prompt and your document selection are sent to the AI. " +
-          "When disabled, only your document selection is sent."
-        )
-        .addToggle(toggle =>
-          toggle
-            .setValue(this.plugin.settings.llmIncludeInlineSystemPrompt)
-            .onChange(async (value) => {
-              this.plugin.settings.llmIncludeInlineSystemPrompt = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    }
-
-    if (this.plugin.settings.llmPromptMode === "picker") {
-      new Setting(containerEl)
-        .setName("Prompts folder")
-        .setDesc("Vault-relative path to the folder containing your prompt files (e.g. Prompts/AI).")
-        .addText(text =>
-          text
-            .setPlaceholder("Prompts/AI")
-            .setValue(this.plugin.settings.llmPromptsFolder)
-            .onChange(async (value) => {
-              this.plugin.settings.llmPromptsFolder = value.trim();
-              await this.plugin.saveSettings();
-            })
-        );
-    }
+    new Setting(containerEl)
+      .setName("Prompts templates folder")
+      .setDesc("Vault-relative path to the folder containing your prompt template files (used by 'Ask AI with template').")
+      .addText(text =>
+        text
+          .setPlaceholder("Prompts templates/AI")
+          .setValue(this.plugin.settings.llmPromptsFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.llmPromptsFolder = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
 
     // ── Section D: Vault note names in context ────────────────────────────────
     this.addSectionHeader(

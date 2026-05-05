@@ -96,7 +96,7 @@ The fields shown depend on the selected provider:
 - **Inline** — use the fixed prompt you type into settings. A toggle lets you skip sending it without losing it.
 - **Pick at invocation** — show a picker every time the command runs so you can choose a `.md` file from a vault folder.
 
-When picker mode is active, set **Prompts folder** to the vault-relative folder that holds your prompt notes (default: `Prompts/AI`).
+When picker mode is active, set **Prompts templates folder** to the vault-relative folder that holds your prompt notes (default: `Prompts/AI`).
 
 ### 4. Vault note names context
 

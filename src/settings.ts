@@ -28,7 +28,6 @@ export interface AiAssistantSettings {
   cliCwd: string;       // optional working directory; empty = inherit from Obsidian
 
   // Prompt configuration
-  llmPromptMode: "none" | "inline" | "picker";
   llmInlinePrompt: string;
   llmIncludeInlineSystemPrompt: boolean;
   llmPromptsFolder: string;
@@ -66,7 +65,6 @@ export const DEFAULT_SETTINGS: AiAssistantSettings = {
   cliArgs: "",
   cliCwd: "",
 
-  llmPromptMode: "picker",
   llmInlinePrompt: "You are an expert assistant. Generate the requested result in Markdown.",
   llmIncludeInlineSystemPrompt: true,
   llmPromptsFolder: "Prompts/AI",

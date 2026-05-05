@@ -19,16 +19,15 @@ describe("Settings Defaults", () => {
     expect(providers).toContain(DEFAULT_SETTINGS.llmProvider);
   });
 
-  it("should default llmPromptMode to picker", () => {
-    expect(DEFAULT_SETTINGS.llmPromptMode).toBe("picker");
-  });
-
-  it("should accept none, inline, and picker as valid prompt modes", () => {
-    const validModes: Array<typeof DEFAULT_SETTINGS.llmPromptMode> = ["none", "inline", "picker"];
-    expect(validModes).toContain(DEFAULT_SETTINGS.llmPromptMode);
-  });
-
   it("should default llmIncludeInlineSystemPrompt to true", () => {
     expect(DEFAULT_SETTINGS.llmIncludeInlineSystemPrompt).toBe(true);
+  });
+
+  it("should have a default llmPromptsFolder", () => {
+    expect(DEFAULT_SETTINGS.llmPromptsFolder).toBe("Prompts/AI");
+  });
+
+  it("should not contain llmPromptMode", () => {
+    expect("llmPromptMode" in DEFAULT_SETTINGS).toBe(false);
   });
 });

@@ -53,15 +53,21 @@ This migration was introduced when the static "prompt from a fixed folder" behav
 
 ```ts
 plugin.addCommand({
-  id: "insert-ai-result",
+  id: "ask-ai",
   name: "Ask AI",
+  editorCallback: async (editor, view) => { ... },
+});
+
+plugin.addCommand({
+  id: "ask-ai-with-template",
+  name: "Ask AI with template",
   editorCallback: async (editor, view) => { ... },
 });
 ```
 
 Two important details:
 
-- **Stable command ID** — `insert-ai-result` must never change after release (per [AGENTS.md](../../AGENTS.md) "Commands & settings" rules).
+- **Stable command IDs** — `ask-ai` and `ask-ai-with-template` must never change after release (per [AGENTS.md](../../AGENTS.md) "Commands & settings" rules).
 - **`editorCallback` (not `callback`)** — using `editorCallback` lets Obsidian decide whether the command is enabled and supplies `editor` + `view` automatically. The original code used `callback`, which prevented the command from appearing in the palette in some contexts; switching to `editorCallback` was the fix.
 
 ## Why there is no explicit `onunload`
